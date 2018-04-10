@@ -6,7 +6,7 @@
  * Author:  Zhang Muhua
  *
  */
-#include<reg52.h>
+#include"stc.h"
 #define MAX_SPEED 7
 #define NOR_SPEED 7
 #define NOR_DIR FWD
@@ -30,7 +30,7 @@
 #define KEY_MODEPROG 'H'
 #define KEY_STOP 'I'
 #define KEY_TEST 'J'
-#define KEY_DELAY_TIME 700
+#define KEY_DELAY_TIME 100
 #define pinDisplay P0
 #define STEPPER_TIMER_K 50
 #define STEP_ANGEL 0.5
@@ -85,7 +85,7 @@ void ResetTimer0()
 void ResetTimer1()
 {
   TH1 = 0x0d8;
-  TL1 = 0x0f0;
+  TL1 = 0x0ff;
 }
 
 u32 SpeedTable(u8 stepSpd)
@@ -465,12 +465,14 @@ void DisplayShowing() interrupt 3
 void BuzzerTone()
 {
   buzzer = 1;
-  delay(KEY_DELAY_TIME / 4);
+  delay(KEY_DELAY_TIME * 2);
   buzzer = 0;
 }
 
 u8 keyPress;
 enum Direction testDir = FWD;
+enum ControlState lastState = READY;
+u8 lastKey = ALL_KEY_UP;
 
 void main()
 {
@@ -486,9 +488,14 @@ void main()
   ET1 = 1;
   TR1 = 1;
   TR0 = 0;
+  P3M1 = 0;
+  P3M0 = 0xff;
+  P2M1 = 0;
+  P2M0 = 0xff;
   while (1)
   {
     keyPress = KeypadGetKey();
+    if (lastKey == keyPress && keyPress != ALL_KEY_UP && keyPress != KEY_TEST)continue;
     if (CurrentState == TEST && keyPress != KEY_TEST)
     {
       CurrentState = READY;
@@ -578,7 +585,7 @@ void main()
         testDir = testDir == FWD ? BWD : FWD;
         displayMode = 0;
         displayNumber = testDir == FWD ? 1 : 0;
-        delay(KEY_DELAY_TIME * 3);
+        delay(KEY_DELAY_TIME * 20);
         displayMode = 1;
         disContent[0] = '-';
         disContent[1] = '-';
@@ -594,7 +601,6 @@ void main()
       {
         if (nowEnterValue == -1)nowEnterValue = keyPress;
         else if (nowEnterValue * 10 + keyPress < 10000)nowEnterValue = nowEnterValue * 10 + keyPress;
-        delay(1200);
       }
     }
     else if (keyPress == KEY_RECOGNIZE && CurrentState != GOBACK)
@@ -632,7 +638,7 @@ void main()
     else if (keyPress == KEY_NEXT && CurrentState != GOBACK)
     {
       BuzzerTone();
-      if (CurrentState == SET_PROG && progNum < MAX_PROG_NUM - 1)
+      if (CurrentState == SET_PROG && progNum < MAX_PROG_NUM - 2)
       {
         progNum++;
         CurrentSetState = HOME;
@@ -642,7 +648,7 @@ void main()
       {
         displayMode = 0;
         displayNumber = historySteps;
-        delay(KEY_DELAY_TIME * 3);
+        delay(KEY_DELAY_TIME * 20);
         displayMode = 1;
         disContent[0] = '-';
         disContent[1] = '-';
@@ -678,7 +684,7 @@ void main()
       {
         displayMode = 0;
         displayNumber = historyAngel;
-        delay(KEY_DELAY_TIME * 3);
+        delay(KEY_DELAY_TIME * 20);
         displayMode = 1;
         disContent[0] = '-';
         disContent[1] = '-';
@@ -687,6 +693,11 @@ void main()
       }
       delay(KEY_DELAY_TIME);
     }
+
+    //record pre data
+    lastKey = keyPress;
+    lastState = CurrentState;
+
     //state event
     if (CurrentState == READY)
     {
